@@ -14,5 +14,10 @@ This project aims to develop an AI-powered resume generator using large language
 ### Prerequisites
 - Python 3.8 or later.
 - Install the required dependencies:
+- ## Dependencies
+
+- `numpy` for numerical computations
+- `matplotlib` for plotting
+- `scipy` for scientific computations
   ```bash
   pip install -r requirements.txt
