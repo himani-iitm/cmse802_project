@@ -1,5 +1,9 @@
 # CMSE 802 Project: AI-Powered Resume Generator
 
+## 🌐 Live Demo
+
+👉 [Click here to use the app](https://v0-ai-resume-builder-himani-iitm-himanshis-projects-93369bd3.vercel.app)
+
 ## Project Description
 This project aims to develop an AI-powered resume generator using large language models (LLMs) and machine learning techniques. The tool will generate optimized and ATS-friendly resumes tailored to user job experiences, skills, and job descriptions.
 
