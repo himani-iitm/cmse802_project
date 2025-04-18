@@ -1,4 +1,4 @@
-import { Sparkles, FileText, Clock, Search, CheckCircle, Layers } from "lucide-react"
+import { Sparkles, FileText, Clock, Search } from "lucide-react"
 
 export function FeaturesSection() {
   const features = [
@@ -10,7 +10,7 @@ export function FeaturesSection() {
     },
     {
       icon: <FileText className="h-10 w-10 text-emerald-600" />,
-      title: "200+ Professional Templates",
+      title: "Professional Templates",
       description:
         "Choose from a wide variety of professionally designed templates that are customizable to match your personal style and industry standards.",
     },
@@ -25,18 +25,6 @@ export function FeaturesSection() {
       title: "ATS-Friendly Formats",
       description:
         "Ensure your resume passes through Applicant Tracking Systems with our optimized formats and keyword suggestions.",
-    },
-    {
-      icon: <CheckCircle className="h-10 w-10 text-emerald-600" />,
-      title: "Expert Recommendations",
-      description:
-        "Get personalized suggestions to improve your resume based on industry best practices and hiring trends.",
-    },
-    {
-      icon: <Layers className="h-10 w-10 text-emerald-600" />,
-      title: "Multiple Format Export",
-      description:
-        "Download your resume in various formats including PDF, DOCX, and TXT to meet different application requirements.",
     },
   ]
 
@@ -55,7 +43,7 @@ export function FeaturesSection() {
             </p>
           </div>
         </div>
-        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-2 lg:grid-cols-2">
           {features.map((feature, index) => (
             <div
               key={index}
