@@ -38,7 +38,7 @@ export function ResumePreview({ data, template }: ResumePreviewProps) {
     <Card className="sticky top-24">
       <CardContent className="p-4">
         <div className="rounded border bg-white p-0 shadow-sm">
-          <div className="max-h-[600px] overflow-auto">{renderTemplate()}</div>
+          <div className="max-h-[600px] overflow-auto resume-preview-content">{renderTemplate()}</div>
         </div>
       </CardContent>
     </Card>

@@ -2,16 +2,15 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { useToast } from "@/hooks/use-toast"
-import { Sparkles, Upload, FileUp } from "lucide-react"
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { Sparkles, Upload, Loader2, Download } from "lucide-react"
+import { jsPDF } from "jspdf"
 
 export default function ImprovePage() {
   const { toast } = useToast()
@@ -19,6 +18,7 @@ export default function ImprovePage() {
   const [jobDescription, setJobDescription] = useState("")
   const [improvedResume, setImprovedResume] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const improvedResumeRef = useRef<HTMLTextAreaElement>(null)
 
   const handleImprove = async () => {
     if (!resumeText) {
@@ -32,28 +32,23 @@ export default function ImprovePage() {
 
     setIsLoading(true)
     try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        prompt: `Improve this resume${jobDescription ? " to better match the job description" : ""}:
-        
-        Resume:
-        ${resumeText}
-        
-        ${
-          jobDescription
-            ? `Job Description:
-        ${jobDescription}`
-            : ""
-        }`,
-        system: `You are an expert resume writer with years of experience helping job seekers land interviews. 
-        Your task is to improve the provided resume text to make it more effective, professional, and impactful.
-        Focus on enhancing the professional summary, making experience descriptions more compelling with strong action verbs and quantifiable achievements,
-        and ensuring the skills section is relevant and comprehensive.
-        If a job description is provided, tailor the resume to highlight relevant experience and skills for that position.
-        Return the improved resume in a clean, well-formatted text format.`,
+      const res = await fetch("/api/improve-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeText,
+          jobDescription,
+        }),
       })
 
-      setImprovedResume(text)
+      if (!res.ok) {
+        throw new Error("Failed to improve resume")
+      }
+
+      const data = await res.json()
+      setImprovedResume(data.improvedResume)
     } catch (error) {
       console.error("Error improving resume:", error)
       toast({
@@ -88,10 +83,29 @@ export default function ImprovePage() {
       return
     }
 
-    // In a real app, this would create a downloadable file
+    // Create a PDF document
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    })
+
+    // Set font and margins
+    doc.setFont("helvetica")
+    doc.setFontSize(11)
+
+    // Split text into lines that fit the page width
+    const textLines = doc.splitTextToSize(improvedResume, 180)
+
+    // Add text to the PDF
+    doc.text(textLines, 15, 20)
+
+    // Save the PDF
+    doc.save("Improved_Resume.pdf")
+
     toast({
       title: "Resume Downloaded",
-      description: "Your improved resume has been downloaded as a text file.",
+      description: "Your improved resume has been downloaded as a PDF file.",
     })
   }
 
@@ -147,7 +161,7 @@ export default function ImprovePage() {
             </Card>
 
             <Button onClick={handleImprove} disabled={isLoading || !resumeText} className="w-full">
-              <Sparkles className="mr-2 h-4 w-4" />
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {isLoading ? "Improving..." : "Improve My Resume"}
             </Button>
           </div>
@@ -159,10 +173,10 @@ export default function ImprovePage() {
             <CardContent>
               {improvedResume ? (
                 <div className="space-y-4">
-                  <Textarea readOnly className="min-h-[500px]" value={improvedResume} />
+                  <Textarea ref={improvedResumeRef} readOnly className="min-h-[500px]" value={improvedResume} />
                   <div className="flex justify-end">
                     <Button variant="outline" onClick={handleDownload}>
-                      <FileUp className="mr-2 h-4 w-4" /> Download
+                      <Download className="mr-2 h-4 w-4" /> Download PDF
                     </Button>
                   </div>
                 </div>

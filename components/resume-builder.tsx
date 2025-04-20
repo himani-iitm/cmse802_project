@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PersonalInfoForm } from "@/components/personal-info-form"
@@ -13,7 +13,10 @@ import { AiAssistant } from "@/components/ai-assistant"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { useToast } from "@/hooks/use-toast"
+import { Loader2 } from "lucide-react"
 import type { ResumeData } from "@/types/resume"
+import { jsPDF } from "jspdf"
+import html2canvas from "html2canvas"
 
 interface ResumeBuilderProps {
   initialTemplate?: string | null
@@ -36,7 +39,11 @@ export function ResumeBuilder({ initialTemplate = null }: ResumeBuilderProps) {
     education: [],
     skills: [],
   })
-  const [showAiAssistant, setShowAiAssistant] = useState(false)
+  const [showAiAssistant, setShowAiAssistant] = useState(true) // Set to true by default
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [resumeId, setResumeId] = useState<string | null>(null)
+  const resumePreviewRef = useRef<HTMLDivElement>(null)
 
   const updateResumeData = (section: string, data: any) => {
     setResumeData((prev) => ({
@@ -67,58 +74,111 @@ export function ResumeBuilder({ initialTemplate = null }: ResumeBuilderProps) {
     }
   }
 
-  const handleSave = () => {
-    toast({
-      title: "Resume saved",
-      description: "Your resume has been saved successfully.",
-    })
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const res = await fetch("/api/save-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeData,
+          template: selectedTemplate,
+          resumeId,
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to save resume")
+      }
+
+      const data = await res.json()
+
+      if (data.resumeId) {
+        setResumeId(data.resumeId)
+      }
+
+      toast({
+        title: "Resume saved",
+        description: "Your resume has been saved successfully.",
+      })
+    } catch (error) {
+      console.error("Error saving resume:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save resume. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  // Update the handleDownload function to actually create a downloadable PDF
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    if (!resumePreviewRef.current) {
+      toast({
+        title: "Error",
+        description: "Resume preview not available. Please try again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsDownloading(true)
     toast({
       title: "Preparing your resume",
-      description: "Your resume is being generated...",
+      description: "Your resume is being generated as a PDF...",
     })
 
-    // In a real app, this would use a PDF generation library
-    // For now, we'll simulate the download with a timeout
-    setTimeout(() => {
-      // Create a simple text version as a fallback
-      const resumeText = `
-${resumeData.personal.name}
-${resumeData.personal.title}
-${resumeData.personal.email} | ${resumeData.personal.phone} | ${resumeData.personal.address}
+    try {
+      // Get the resume preview element
+      const element = resumePreviewRef.current.querySelector(".resume-preview-content")
 
-SUMMARY
-${resumeData.personal.summary}
+      if (!element) {
+        throw new Error("Resume preview content not found")
+      }
 
-EXPERIENCE
-${resumeData.experience.map((exp) => `${exp.position} at ${exp.company}, ${exp.startDate} - ${exp.endDate}\n${exp.description}`).join("\n\n")}
+      // Use html2canvas to capture the resume as an image
+      const canvas = await html2canvas(element, {
+        scale: 2, // Higher scale for better quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#FFFFFF",
+      })
 
-EDUCATION
-${resumeData.education.map((edu) => `${edu.degree} in ${edu.field}, ${edu.institution}, ${edu.startDate} - ${edu.endDate}`).join("\n")}
+      // Create a new PDF with appropriate dimensions
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      })
 
-SKILLS
-${resumeData.skills.join(", ")}
-    `.trim()
+      // Add the image to the PDF
+      const imgData = canvas.toDataURL("image/png")
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height)
 
-      // Create a blob and download link
-      const blob = new Blob([resumeText], { type: "text/plain" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${resumeData.personal.name.replace(/\s+/g, "_")}_Resume.txt`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      // Save the PDF
+      const fileName = resumeData.personal.name
+        ? `${resumeData.personal.name.replace(/\s+/g, "_")}_Resume.pdf`
+        : "Resume.pdf"
+
+      pdf.save(fileName)
 
       toast({
         title: "Resume downloaded",
-        description: "Your resume has been downloaded as a text file.",
+        description: "Your resume has been downloaded as a PDF file.",
       })
-    }, 1500)
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      toast({
+        title: "Error",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   return (
@@ -131,10 +191,14 @@ ${resumeData.skills.join(", ")}
             <Button variant="outline" onClick={() => setShowAiAssistant(!showAiAssistant)}>
               {showAiAssistant ? "Hide AI Assistant" : "Show AI Assistant"}
             </Button>
-            <Button variant="outline" onClick={handleSave}>
+            <Button variant="outline" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Save
             </Button>
-            <Button onClick={handleDownload}>Download PDF</Button>
+            <Button onClick={handleDownload} disabled={isDownloading}>
+              {isDownloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Download PDF
+            </Button>
           </div>
         </div>
 
@@ -175,14 +239,14 @@ ${resumeData.skills.join(", ")}
               <Button variant="outline" onClick={handlePrevious} disabled={activeTab === "personal"}>
                 Previous
               </Button>
-              <Button onClick={handleNext} disabled={activeTab === "template"}>
-                Next
-              </Button>
+              <Button onClick={handleNext}>{activeTab === "template" ? "Download Resume" : "Next"}</Button>
             </div>
           </div>
 
           <div className="flex flex-col gap-4">
-            <ResumePreview data={resumeData} template={selectedTemplate} />
+            <div ref={resumePreviewRef}>
+              <ResumePreview data={resumeData} template={selectedTemplate} />
+            </div>
             {showAiAssistant && <AiAssistant resumeData={resumeData} updateResumeData={updateResumeData} />}
           </div>
         </div>

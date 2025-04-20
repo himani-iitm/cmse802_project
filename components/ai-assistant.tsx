@@ -7,11 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Sparkles, Send } from "lucide-react"
+import { Sparkles, Send, Loader2 } from "lucide-react"
 import type { ResumeData } from "@/types/resume"
 import { useToast } from "@/hooks/use-toast"
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
 
 interface AiAssistantProps {
   resumeData: ResumeData
@@ -32,15 +30,24 @@ export function AiAssistant({ resumeData, updateResumeData }: AiAssistantProps) 
     setResponse("")
 
     try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        prompt: prompt,
-        system: `You are an AI resume assistant. Help the user improve their resume content. 
-        Current resume data: ${JSON.stringify(resumeData)}. 
-        Provide specific, actionable suggestions to improve their resume.`,
+      const res = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeData,
+          action: "custom-prompt",
+          prompt: prompt,
+        }),
       })
 
-      setResponse(text)
+      if (!res.ok) {
+        throw new Error("Failed to generate response")
+      }
+
+      const data = await res.json()
+      setResponse(data.text || "I've analyzed your resume and prompt. " + data.message || "")
     } catch (error) {
       console.error("Error generating response:", error)
       toast({
@@ -58,25 +65,37 @@ export function AiAssistant({ resumeData, updateResumeData }: AiAssistantProps) 
     setResponse("")
 
     try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        prompt: `Generate a professional summary based on the following experience and skills:
-        Experience: ${JSON.stringify(resumeData.experience)}
-        Skills: ${JSON.stringify(resumeData.skills)}`,
-        system:
-          "You are an AI resume assistant. Generate a concise, professional summary (3-4 sentences) highlighting key strengths and experience.",
+      const res = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeData,
+          action: "generate-summary",
+        }),
       })
 
-      // Update the resume data with the generated summary
-      updateResumeData("personal", {
-        ...resumeData.personal,
-        summary: text,
-      })
+      if (!res.ok) {
+        throw new Error("Failed to generate summary")
+      }
 
-      toast({
-        title: "Summary Generated",
-        description: "Professional summary has been updated.",
-      })
+      const data = await res.json()
+
+      if (data.summary) {
+        // Update the resume data with the generated summary
+        updateResumeData("personal", {
+          ...resumeData.personal,
+          summary: data.summary,
+        })
+
+        toast({
+          title: "Summary Generated",
+          description: "Professional summary has been updated.",
+        })
+      } else {
+        setResponse("Here's a suggested professional summary:\n\n" + data.text || data.message)
+      }
     } catch (error) {
       console.error("Error generating summary:", error)
       toast({
@@ -103,15 +122,36 @@ export function AiAssistant({ resumeData, updateResumeData }: AiAssistantProps) 
     setResponse("")
 
     try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        prompt: `Improve the descriptions for the following work experiences to be more impactful and achievement-oriented:
-        ${JSON.stringify(resumeData.experience)}`,
-        system:
-          "You are an AI resume assistant. Enhance job descriptions to highlight achievements with metrics when possible. Use strong action verbs and focus on results.",
+      const res = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeData,
+          action: "improve-experience",
+        }),
       })
 
-      setResponse("Here are suggestions to improve your work experience descriptions:\n\n" + text)
+      if (!res.ok) {
+        throw new Error("Failed to improve experience")
+      }
+
+      const data = await res.json()
+
+      if (data.experience) {
+        // Option to update the experience directly
+        updateResumeData("experience", data.experience)
+        toast({
+          title: "Experience Improved",
+          description: "Your work experience descriptions have been enhanced.",
+        })
+      } else {
+        setResponse(
+          "Here are suggestions to improve your work experience descriptions:\n\n" +
+            (data.suggestions || data.message || ""),
+        )
+      }
     } catch (error) {
       console.error("Error improving experience:", error)
       toast({
@@ -129,16 +169,30 @@ export function AiAssistant({ resumeData, updateResumeData }: AiAssistantProps) 
     setResponse("")
 
     try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        prompt: `Based on the following experience and current skills, suggest relevant skills that would strengthen this resume:
-        Experience: ${JSON.stringify(resumeData.experience)}
-        Current Skills: ${JSON.stringify(resumeData.skills)}`,
-        system:
-          "You are an AI resume assistant. Suggest relevant technical and soft skills based on the user's experience. Focus on in-demand skills for their industry.",
+      const res = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeData,
+          action: "suggest-skills",
+        }),
       })
 
-      setResponse("Here are suggested skills to add to your resume:\n\n" + text)
+      if (!res.ok) {
+        throw new Error("Failed to suggest skills")
+      }
+
+      const data = await res.json()
+
+      if (data.suggestedSkills && Array.isArray(data.suggestedSkills)) {
+        setResponse("Here are suggested skills to add to your resume:\n\n" + data.suggestedSkills.join("\n"))
+      } else {
+        setResponse(
+          "Here are suggested skills to add to your resume:\n\n" + (data.suggestedSkillsText || data.message || ""),
+        )
+      }
     } catch (error) {
       console.error("Error suggesting skills:", error)
       toast({
@@ -162,12 +216,15 @@ export function AiAssistant({ resumeData, updateResumeData }: AiAssistantProps) 
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={generateSummary} disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Generate Summary
           </Button>
           <Button variant="outline" size="sm" onClick={improveExperience} disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Improve Experience
           </Button>
           <Button variant="outline" size="sm" onClick={suggestSkills} disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Suggest Skills
           </Button>
         </div>
@@ -182,7 +239,7 @@ export function AiAssistant({ resumeData, updateResumeData }: AiAssistantProps) 
             disabled={isLoading}
           />
           <Button type="submit" disabled={isLoading || !prompt.trim()}>
-            <Send className="h-4 w-4" />
+            {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
       </CardContent>
